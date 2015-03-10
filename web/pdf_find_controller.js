@@ -133,7 +133,7 @@ var PDFFindController = (function PDFFindControllerClosure() {
     // After:
     // matches       1 2 5 7
     // matchesLength 4 6 3 2
-    clearMatches: function PDFFindController_clearMatches(
+    prepareMatches: function PDFFindController_prepareMatches(
         matchesWithLength, matches, matchesLength) {
       var i, len;
       this.sortMatches(matchesWithLength);
@@ -153,7 +153,7 @@ var PDFFindController = (function PDFFindControllerClosure() {
       var caseSensitive = this.state.caseSensitive;
       var phraseSearch = this.state.phraseSearch;
       var queryLen = query.length;
-      var matches = [], matchesLength, matchesWithLength;
+      var matches = [], matchesWithLength;
 
       function addMatches(query) {
         if (query === '') {
@@ -166,10 +166,12 @@ var PDFFindController = (function PDFFindControllerClosure() {
           if (matchIdx === -1) {
             return;
           }
-          if (!phraseSearch) {
-            matchesWithLength.push({ match: matchIdx, matchLength: queryLen });
-          } else {
+          if (phraseSearch) {
+            // Phrase searches always have the same query length.
             matches.push(matchIdx);
+          } else {
+            // Other searches do not, so we store the length.
+            matchesWithLength.push({ match: matchIdx, matchLength: queryLen });
           }
         }
       }
@@ -185,21 +187,24 @@ var PDFFindController = (function PDFFindControllerClosure() {
 
       if (phraseSearch) {
         addMatches(query);
+        this.pageMatches[pageIndex] = matches;
       } else {
+        matchesWithLength = [];
+        // Divide the query into pieces and search for text on each piece.
+        var queryArray = query.split(DIVIDER_TERMS);
+        queryArray.forEach(addMatches);
+        // Prepare arrays for store the matches.
         if (!this.pageMatchesLength) {
           this.pageMatchesLength = [];
         }
-        matchesWithLength = [];
-        var queryArray = query.split(DIVIDER_TERMS);
-        queryArray.forEach(addMatches);
-        matchesLength = [];
-        this.clearMatches(matchesWithLength, matches, matchesLength);
+        this.pageMatchesLength[pageIndex] = [];
+        this.pageMatches[pageIndex] = [];
+        // Sort matchesWithLength, clean up intersecting terms
+        // and put the result into the two arrays.
+        this.prepareMatches(matchesWithLength, this.pageMatches[pageIndex],
+            this.pageMatchesLength[pageIndex]);
       }
 
-      this.pageMatches[pageIndex] = matches;
-      if (matchesLength) {
-        this.pageMatchesLength[pageIndex] = matchesLength;
-      }
       this.updatePage(pageIndex);
       if (this.resumePageIdx === pageIndex) {
         this.resumePageIdx = null;
